@@ -1,0 +1,41 @@
+/* 첫 화면 인트로: 위성 → 주차 연출, 시작 버튼, 로그인으로 넘어가는 전환 */
+.intro { position: fixed; inset: 0; background: #050b16; overflow: hidden; color: #fff; transition: opacity .7s ease, transform .7s ease; }
+.intro.is-out { opacity: 0; transform: scale(1.04); }
+.intro-video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.intro-canvas { position: absolute; inset: 0; transition: filter 1s ease, transform 1.2s ease; }
+.intro-canvas.dim { filter: blur(7px) brightness(.5) saturate(1.1); transform: scale(1.05); }
+.intro-skip { position: absolute; top: 20px; right: 24px; border: 1px solid rgba(255, 255, 255, .3); background: rgba(255, 255, 255, .06); color: #fff; padding: 6px 14px; font: 12px ui-monospace, Menlo, Consolas, monospace; letter-spacing: .14em; backdrop-filter: blur(6px); cursor: pointer; transition: background .2s; }
+.intro-skip:hover { background: rgba(255, 255, 255, .18); }
+
+.intro-layer { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding: 0 20px 7vh; text-align: center; transition: transform .95s cubic-bezier(.7, 0, .2, 1), opacity .8s ease; }
+.intro-main::before { content: ''; position: absolute; inset: 0; z-index: -1; background: rgba(6, 18, 38, .16); }
+.intro-main.wait { opacity: 0; transform: translateY(18px); pointer-events: none; }
+.intro-main.out { opacity: 0; transform: translateY(-14vh); pointer-events: none; }
+.intro-main { justify-content: center; padding: 0 20px; }
+.intro-head { text-align: center; padding: 30px 46px 26px; margin-bottom: 26px; background: rgba(8, 20, 42, .58); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, .18); box-shadow: 0 20px 60px rgba(0, 0, 0, .4); max-width: min(92vw, 640px); }
+.intro-eyebrow { font-size: .78rem; letter-spacing: .4em; color: #bfe0ff; margin-bottom: 14px; font-weight: 700; text-shadow: 0 1px 8px rgba(0, 0, 0, .6); }
+.intro-title { font-size: clamp(2.1rem, 5.6vw, 4rem); font-weight: 800; letter-spacing: -.02em; line-height: 1.2; margin: 0 0 14px; color: #fff; text-shadow: 0 2px 4px rgba(0, 0, 0, .55), 0 8px 30px rgba(0, 0, 0, .55); }
+.intro-sub { color: #eaf3ff; margin: 0; font-size: 1.08rem; font-weight: 500; letter-spacing: .01em; text-shadow: 0 1px 6px rgba(0, 0, 0, .7); }
+
+/* 시작 버튼: 유리 느낌 + 빛이 훑고 지나감 */
+.intro-cta { position: relative; display: inline-flex; white-space: nowrap; align-items: center; gap: 14px; padding: 17px 42px; border: 1px solid rgba(255, 255, 255, .7); background: linear-gradient(135deg, #1a73e8, #1560c4); color: #fff; font-size: 1.12rem; text-shadow: 0 1px 3px rgba(0, 0, 0, .35); font-weight: 700; letter-spacing: .12em; cursor: pointer; overflow: hidden; transition: background .3s, border-color .3s, transform .3s, box-shadow .3s; box-shadow: 0 10px 40px rgba(0, 0, 0, .35); }
+.intro-cta::after { content: ''; position: absolute; top: 0; left: -60%; width: 40%; height: 100%; background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .45), transparent); transform: skewX(-18deg); animation: shine 3.2s ease-in-out infinite; }
+@keyframes shine { 0% { left: -60%; } 55%, 100% { left: 130%; } }
+.intro-cta i { transition: transform .3s; }
+.intro-cta:hover { background: linear-gradient(135deg, #3b8af2, #1a73e8); border-color: #fff; transform: translateY(-2px); box-shadow: 0 16px 50px rgba(26, 115, 232, .5); }
+.intro-cta:hover i { transform: translateX(6px); }
+.intro-cta:active { transform: translateY(0); }
+
+/* 로그인 창: 아래에서 스르륵 올라옴 */
+.intro-login { justify-content: center; padding-bottom: 0; opacity: 0; transform: translateY(18vh); pointer-events: none; }
+.intro-login.in { opacity: 1; transform: none; pointer-events: auto; }
+.login-box { width: min(92vw, 400px); text-align: center; }
+.login-title { font-size: 1.5rem; font-weight: 800; margin: 0 0 18px; text-shadow: 0 2px 18px rgba(0, 0, 0, .6); }
+.login-box .card { box-shadow: 0 30px 80px rgba(0, 0, 0, .55); text-align: left; color: var(--ink); }
+.login-back { margin-top: 16px; border: 0; background: none; color: rgba(255, 255, 255, .75); font-size: .9rem; cursor: pointer; }
+.login-back:hover { color: #fff; }
+
+@media (prefers-reduced-motion: reduce) {
+  .intro-layer, .intro-canvas, .intro { transition-duration: .01s; }
+  .intro-cta::after, .intro-hud .live { animation: none; }
+}

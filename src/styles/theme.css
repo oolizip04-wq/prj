@@ -1,0 +1,29 @@
+/* 우리 앱 스타일: 흰색 · 잉크 · 파란 포인트, 각진 모서리 */
+:root {
+  --bs-primary: #1a73e8;
+  --bs-primary-rgb: 26, 115, 232;
+  --bs-link-color: #1a73e8;
+  --bs-border-radius: 0;
+  --bs-border-radius-sm: 0;
+  --bs-border-radius-lg: 0;
+  --bs-border-radius-xl: 0;
+  --bs-border-radius-pill: 0;
+  --ink: #12161c;
+  --fav: #e6b800;
+}
+body { font-family: 'Pretendard', system-ui, sans-serif; background: #f6f7f9; color: var(--ink); }
+.btn-primary { --bs-btn-bg: #1a73e8; --bs-btn-border-color: #1a73e8; --bs-btn-hover-bg: #1560c4; --bs-btn-hover-border-color: #1560c4; --bs-btn-active-bg: #1560c4; --bs-btn-active-border-color: #1560c4; }
+.btn-outline-primary { --bs-btn-color: #1a73e8; --bs-btn-border-color: #1a73e8; --bs-btn-hover-bg: #1a73e8; --bs-btn-hover-border-color: #1a73e8; }
+.rounded, .rounded-3, .rounded-4 { border-radius: 0 !important; }
+.navbar.bg-dark { background: var(--ink) !important; }
+
+.hero { background: var(--ink); color: #fff; }
+.hero h1, .hero .lead { color: #fff; }
+
+.fav-star { color: var(--fav); }
+
+/* AI 대화 */
+.chat-box .msg { max-width: 85%; padding: .6rem .9rem; margin-bottom: .6rem; white-space: pre-wrap; }
+.chat-box .msg.assistant { background: #fff; border: 1px solid #dfe3ea; }
+.chat-box .msg.user { background: var(--ink); color: #fff; margin-left: auto; }
+.chat-box .msg.error { border-color: #d9363e; color: #d9363e; }

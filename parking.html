@@ -1,0 +1,666 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>제주 주차장 지도</title>
+    <link rel="icon" href="/favicon.svg" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Vite 가 .env.local 의 VITE_ 값(공개용 anon key)을 여기에 채워 넣습니다 -->
+    <script>window.SB = { url: '%VITE_SUPABASE_URL%', key: '%VITE_SUPABASE_ANON_KEY%' }</script>
+    <style>
+      /* 각지고 선명한 모노톤 + 파란 포인트 — 색은 모두 이 변수에서 바꿀 수 있어요 */
+      :root {
+        --bg: #f2f3f5;        /* 페이지 바탕 */
+        --surface: #ffffff;   /* 패널·카드 */
+        --surface-2: #eceef2; /* 선택·눌림 */
+        --line: #d5d9e0;
+        --ink: #11151c;
+        --ink-2: #5d6675;
+        --brand: #0e1218;     /* 헤더 */
+        --accent: #2447f5;    /* 포인트: 로열 블루 */
+        --free: #4aa0e6;      /* 무료: 바다(#a5d3f3)보다 살짝 진한 파랑 */
+        --paid: #d9363e;      /* 유료: 빨강 */
+        --mixed: #f07f1c;     /* 일부 유료(혼합): 주황 */
+        --unknown: #8b93a1;
+        --hit: #e11d48;       /* AI 검색 결과 */
+        --fav: #e6b800;       /* 즐겨찾기: 황금색 별 */
+        --fav-bg: #fff7d6;
+      }
+      * { box-sizing: border-box; border-radius: 0; }          /* 모든 모서리를 각지게 (원형 핀·점만 예외) */
+      body { margin: 0; font-family: 'Pretendard', system-ui, sans-serif; display: flex; flex-direction: column; height: 100vh; background: var(--bg); color: var(--ink); }
+      button, input { font-family: inherit; color: inherit; }
+      header { padding: 12px 18px; background: var(--brand); color: #fff; display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+      header h1 { font-size: 1.05rem; margin: 0; font-weight: 800; letter-spacing: -.01em; }
+      .chips label { margin-right: 12px; cursor: pointer; font-size: .85rem; }
+      .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50% !important; margin-right: 5px; }
+      #status { font-size: .8rem; opacity: .7; margin-left: auto; }
+      #status.demo { color: #ffc857; opacity: 1; }
+      /* 핀 크기는 지도 확대 수준에 따라 --pin 값(JS가 갱신)으로 조절. 끝(뾰족한 곳)이 좌표에 닿도록 위쪽으로 띄워 배치 */
+      #map { --pin: 8px; }
+      .pin { position: absolute; left: calc(var(--pin) / -2); top: calc(var(--pin) * -1.207); width: var(--pin); height: var(--pin);
+             border-radius: 50% 50% 50% 0 !important; transform: rotate(-45deg); border: 1px solid #fff; transition: width .15s, height .15s, left .15s, top .15s; }
+      /* 육지는 하얗게, 바다는 연한 하늘색, 산지는 옅은 초록 — 기본 타일 색을 이 방향으로 보정 */
+      .leaflet-tile-pane { filter: brightness(1.07) saturate(1.1) contrast(.9) hue-rotate(24deg); }   /* HOT 타일의 청록빛 바다를 하늘색으로 */
+      .leaflet-container { background: #a5d3f3; font-family: inherit; }
+      .leaflet-bar, .leaflet-bar a { border-radius: 0 !important; }
+      .leaflet-bar a { background: var(--surface); color: var(--ink); border-color: var(--line); }
+      .leaflet-control-attribution { background: rgba(255,255,255,.88) !important; color: var(--ink-2); }
+      #authBtn, #signupBtn { border: 1px solid rgba(255,255,255,.55); background: transparent; color: #fff; padding: 4px 12px; cursor: pointer; font-size: .82rem; }
+      #signupBtn { background: #fff; color: var(--ink); }
+      #authBtn:hover, #signupBtn:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+      #modal { position: fixed; inset: 0; background: rgba(14,18,24,.55); display: flex; align-items: center; justify-content: center; z-index: 2000; }
+      #modal[hidden] { display: none; }
+      #authForm { position: relative; width: min(360px, 90vw); background: #fff; border: 2px solid var(--ink); padding: 26px 24px 20px; display: flex; flex-direction: column; gap: 10px; }
+      #authForm h3 { margin: 0 0 4px; font-size: 1.15rem; font-weight: 800; }
+      #authForm input { padding: 11px 12px; border: 1.5px solid var(--ink); font-size: .95rem; outline: none; }
+      #authForm input:focus { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+      #authForm #aGo { padding: 11px; border: 1.5px solid var(--ink); background: var(--ink); color: #fff; font-weight: 700; cursor: pointer; }
+      #authForm #aGo:hover { background: var(--accent); border-color: var(--accent); }
+      #authForm #aGo:disabled { opacity: .5; cursor: wait; }
+      #authForm .link { border: 0; background: none; color: var(--accent); cursor: pointer; font-size: .85rem; padding: 4px; }
+      #authForm .x { position: absolute; top: 8px; right: 10px; border: 0; background: none; font-size: 1.3rem; cursor: pointer; color: var(--ink-2); }
+      #aMsg { min-height: 1.2em; font-size: .84rem; color: var(--hit); }
+      #aMsg.ok { color: var(--ink-2); }
+      #ask { display: flex; gap: 0; padding: 12px 18px 10px; background: var(--surface); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+      #ask input { flex: 1; min-width: 220px; padding: 11px 14px; border: 1.5px solid var(--ink); border-right: 0; font-size: .95rem; background: #fff; outline: none; }
+      #ask input:focus { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+      #ask button { padding: 11px 24px; border: 1.5px solid var(--ink); background: var(--ink); color: #fff; cursor: pointer; font-weight: 700; letter-spacing: .02em; }
+      #ask button:hover { background: var(--accent); border-color: var(--accent); }
+      #ask button:disabled { opacity: .5; cursor: wait; }
+      #ask .ex { width: 100%; font-size: .78rem; color: var(--ink-2); margin-top: 8px; }
+      #ask .ex a { cursor: pointer; color: var(--ink); margin-right: 8px; padding: 2px 8px; border: 1px solid var(--line); text-decoration: none; display: inline-block; }
+      #ask .ex a:hover { border-color: var(--accent); color: var(--accent); }
+      #answer { display: none; max-height: 18vh; overflow-y: auto; padding: 12px 18px; background: #f5f7ff; border-bottom: 1px solid var(--line); border-left: 4px solid var(--accent); font-size: .9rem; line-height: 1.55; white-space: pre-wrap; }
+      #ask #locBtn { margin-left: 6px; background: #fff; color: var(--ink); }
+      #ask #locBtn.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+      .navlinks { margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
+      .navlinks a, .navlinks button { font: inherit; font-size: .8rem; padding: 5px 10px; border: 1px solid var(--line); background: #fff; color: var(--ink); text-decoration: none; cursor: pointer; }
+      .navlinks a:hover, .navlinks button:hover { border-color: var(--accent); color: var(--accent); }
+      .me { position: relative; width: 0; height: 0; }
+      .me i { position: absolute; left: -9px; top: -9px; width: 18px; height: 18px; border-radius: 50%; background: #1a73e8; border: 3px solid #fff; box-shadow: 0 0 0 2px #1a73e8, 0 2px 6px rgba(0,0,0,.35); }
+      .me i::after { content: ''; position: absolute; inset: -12px; border-radius: 50%; background: rgba(26,115,232,.28); animation: mepulse 1.8s ease-out infinite; }
+      .me b { position: absolute; left: 16px; top: -12px; white-space: nowrap; background: #1a73e8; color: #fff; font-size: .75rem; padding: 3px 8px; }
+      @keyframes mepulse { from { transform: scale(.4); opacity: 1; } to { transform: scale(1.6); opacity: 0; } }
+      .poi { width: 12px; height: 12px; background: #7a4bd6; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 0 1px #7a4bd6; }
+      .poi.restaurant, .poi.fast_food { background: #1f9d6b; box-shadow: 0 0 0 1px #1f9d6b; }
+      body.locked #ask, body.locked main, body.locked #fav { visibility: hidden; }
+      body.locked #aClose { display: none; }
+      #routeBox { display: none; padding: 14px 16px; border-bottom: 1px solid var(--ink); background: #f5f9ff; }
+      #routeBox h3 { margin: 0 0 4px; font-size: .95rem; }
+      #routeBox .sum { color: var(--ink-2); font-size: .82rem; margin-bottom: 8px; }
+      #routeBox .tabs { display: flex; gap: 4px; margin-bottom: 6px; }
+      #routeBox .tabs button, #routeBox .clr { font: inherit; font-size: .78rem; padding: 4px 10px; border: 1px solid var(--line); background: #fff; cursor: pointer; }
+      #routeBox .tabs button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+      #routeBox .clr { float: right; }
+      #routeBox .poi-row { padding: 6px 4px; border-top: 1px solid var(--line); font-size: .85rem; cursor: pointer; display: flex; gap: 8px; align-items: baseline; }
+      #routeBox .poi-row:hover { background: #fff; }
+      #routeBox .poi-row small { color: var(--ink-2); margin-left: auto; white-space: nowrap; }
+      #routeBox .none { color: var(--ink-2); font-size: .82rem; padding: 6px 0; }
+      #answer details { margin-top: 8px; color: var(--ink-2); font-size: .8rem; white-space: normal; }
+      #answer summary { cursor: pointer; }
+      #answer .step { padding: 2px 0 2px 12px; word-break: break-all; }
+      #answer .step.bad { color: var(--hit); }
+      #answer small { display: block; color: var(--ink-2); margin-top: 6px; }
+      #answer.err { background: #fff0f0; border-left-color: var(--hit); }
+      main { flex: 1; display: flex; min-height: 0; }
+      #map { flex: 1; }
+      #side { width: 330px; display: flex; flex-direction: column; border-left: 1px solid var(--ink); background: var(--surface); min-height: 0; }
+      #list { flex: 1; overflow-y: auto; min-height: 0; }
+      #detail { display: none; max-height: 55%; overflow-y: auto; padding: 14px 16px; background: var(--surface); border-bottom: 2px solid var(--ink); font-size: .88rem; position: relative; }
+      #detail h2 { font-size: 1.05rem; margin: 0 24px 8px 0; line-height: 1.35; font-weight: 800; }
+      #detail .tag { display: inline-block; padding: 2px 9px; color: #fff; font-size: .72rem; margin-right: 4px; font-weight: 600; }
+      #detail dl { display: grid; grid-template-columns: 72px 1fr; gap: 6px 8px; margin: 12px 0 0; }
+      #detail dt { color: var(--ink-2); }
+      #detail dd { margin: 0; }
+      #detail .x { position: absolute; top: 8px; right: 10px; border: 0; background: none; font-size: 1.25rem; cursor: pointer; color: var(--ink-2); }
+      #detail .x:hover { color: var(--ink); }
+      #list .row.sel { background: #eef1ff; box-shadow: inset 4px 0 0 var(--accent); }
+      #detail .favbtn { margin-top: 14px; width: 100%; padding: 10px; border: 1.5px solid var(--ink); background: #fff; color: var(--ink); cursor: pointer; font-weight: 700; }
+      #detail .favbtn:hover { background: var(--fav-bg); border-color: var(--fav); }
+      #detail .favbtn.on { background: var(--fav-bg); border-color: var(--fav); }
+      #detail .favbtn .fs { color: var(--fav); }
+      #fav { border-top: 1px solid var(--ink); background: var(--surface); padding: 10px 18px; font-size: .85rem; }
+      #fav .bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+      #fav .bar b { font-size: .95rem; }
+      #fav .bar input { width: 110px; padding: 4px 8px; border: 1px solid var(--line); background: #fff; }
+      #fav .bar input:focus { outline: 0; border-color: var(--accent); }
+      #fav .bar .note { color: var(--ink-2); font-size: .76rem; }
+      #fav .bar button { border: 1px solid var(--line); background: var(--surface); padding: 4px 12px; cursor: pointer; }
+      #fav .bar button:hover { border-color: var(--ink); }
+      #fav .bar .sp { margin-left: auto; }
+      #favlist { display: flex; gap: 10px; overflow-x: auto; padding: 9px 0 3px; }
+      #favlist .empty { color: var(--ink-2); padding: 6px 0; }
+      #favlist .card { flex: 0 0 214px; position: relative; border: 1px solid var(--line); border-left: 4px solid var(--fav); background: #fff; padding: 9px 28px 9px 12px; cursor: pointer; }
+      #favlist .card:hover { background: var(--fav-bg); }
+      #favlist .card b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      #favlist .card span { color: var(--ink-2); font-size: .78rem; }
+      #favlist .card .rm { position: absolute; top: 5px; right: 7px; border: 0; background: none; cursor: pointer; font-size: 1rem; color: var(--ink-2); }
+      #favlist .card .rm:hover { color: var(--hit); }
+      .pin.sel { outline: 2px solid var(--ink); outline-offset: 1px; z-index: 5; }
+      /* 즐겨찾기에 담은 곳은 황금색 별 (핀과 같이 확대할수록 커짐) */
+      .star { position: absolute; left: calc(var(--pin) * -.8); top: calc(var(--pin) * -.8); width: calc(var(--pin) * 1.6); height: calc(var(--pin) * 1.6);
+              line-height: calc(var(--pin) * 1.6); font-size: calc(var(--pin) * 1.6); text-align: center; color: var(--fav);
+              -webkit-text-stroke: 1.5px #fff; paint-order: stroke fill; text-shadow: 0 1px 3px rgba(0,0,0,.35); transition: transform .15s; }
+      .star.sel { transform: scale(1.35); }
+      .fstar, #favlist .card .fstar { color: var(--fav); font-size: inherit; margin-right: 5px; }
+      #list .row { padding: 10px 14px; border-bottom: 1px solid var(--line); cursor: pointer; font-size: .85rem; }
+      #list .row:hover { background: var(--bg); }
+      #list .focusbar { position: sticky; top: 0; display: flex; justify-content: space-between; align-items: center; padding: 9px 14px; background: var(--ink); color: #fff; font-size: .85rem; font-weight: 700; }
+      #list .focusbar button { border: 1px solid #fff; background: transparent; color: #fff; padding: 2px 10px; cursor: pointer; }
+      #list .focusbar button:hover { background: #fff; color: var(--ink); }
+      #list .num { display: inline-block; width: 18px; height: 18px; line-height: 18px; text-align: center; background: var(--hit); color: #fff; font-size: 11px; font-weight: 700; margin-right: 6px; }
+      #list .row b { display: block; }
+      #list .meta { color: var(--ink-2); }
+      @media (max-width: 700px) { main { flex-direction: column; } #side { width: auto; height: 45%; border-left: 0; border-top: 1px solid var(--ink); } }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>🅿️ 제주 주차장 지도</h1>
+      <div class="chips">
+        <label><input type="checkbox" id="fFree" checked /><span class="dot" style="background:var(--free)"></span>무료 <span id="cFree"></span></label>
+        <label><input type="checkbox" id="fPaid" checked /><span class="dot" style="background:var(--paid)"></span>유료 <span id="cPaid"></span></label>
+        <label><input type="checkbox" id="fMixed" checked /><span class="dot" style="background:var(--mixed)"></span>일부 유료 <span id="cMixed"></span></label>
+      </div>
+      <div id="status">불러오는 중...</div>
+      <span id="nowtag" style="font-size:.78rem;opacity:.7"></span>
+      <button id="authBtn" type="button">로그인</button>
+      <button id="signupBtn" type="button">회원가입</button>
+    </header>
+    <form id="ask">
+      <input id="q" placeholder="AI에게 물어보세요 — 예: 공항 근처 무료 주차장 알려줘" autocomplete="off" />
+      <button id="go" type="submit">AI 검색</button>
+      <button id="locBtn" type="button" title="내 위치를 AI에게 알려 줘요">내 위치</button>
+      <div class="ex">예시:
+        <a data-q="공항 근처 무료 주차장 알려줘">공항 근처 무료</a>
+        <a data-q="서귀포 올레시장 가까운 주차장 3곳">올레시장 근처 3곳</a>
+        <a data-q="성산일출봉 근처에 100면 이상 주차장 있어?">성산일출봉 100면 이상</a>
+        <a data-q="제주국제공항에서 성산일출봉 가는 길에 들를 만한 카페 알려줘">공항→성산 카페</a>
+      </div>
+    </form>
+    <div id="answer"></div>
+    <main>
+      <div id="map"></div>
+      <aside id="side">
+        <div id="routeBox"></div>
+        <div id="detail"></div>
+        <div id="list"></div>
+      </aside>
+    </main>
+    <footer id="fav">
+      <div class="bar">
+        <b>⭐ 즐겨찾기 <span id="favCount">(0)</span></b>
+        <span class="note" id="favNote"></span>
+        <button type="button" id="favClear" class="sp">모두 비우기</button>
+      </div>
+      <div id="favlist"></div>
+    </footer>
+    <div id="modal" hidden>
+      <form id="authForm">
+        <button type="button" id="aClose" class="x" title="닫기">×</button>
+        <h3 id="authTitle">로그인</h3>
+        <input id="aEmail" type="email" placeholder="이메일" autocomplete="email" required />
+        <input id="aPw" type="password" placeholder="비밀번호 (6자 이상)" autocomplete="current-password" minlength="6" required />
+        <input id="aPw2" type="password" placeholder="비밀번호 확인" autocomplete="new-password" hidden />
+        <div id="aMsg"></div>
+        <button type="submit" id="aGo">로그인</button>
+        <button type="button" id="aSwitch" class="link">계정이 없어요 → 가입</button>
+      </form>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+      // 키가 없거나 API가 실패하면 보여 줄 샘플 (실제 데이터 아님)
+      const SAMPLE = [
+        { name: '(샘플) 제주시청 공영주차장', kind: 'paid', addr: '제주시 광양9길 10', lat: 33.4996, lng: 126.5312, spaces: 120, fee: '30분 1,000원' },
+        { name: '(샘플) 동문시장 공영주차장', kind: 'paid', addr: '제주시 이도일동', lat: 33.5134, lng: 126.5280, spaces: 90, fee: '30분 600원' },
+        { name: '(샘플) 서귀포 올레시장 주차장', kind: 'paid', addr: '서귀포시 서귀동', lat: 33.2487, lng: 126.5636, spaces: 60, fee: '30분 600원' },
+        { name: '(샘플) 제주공항 인근 민영주차장', kind: 'paid', addr: '제주시 용담이동', lat: 33.5071, lng: 126.4930, spaces: 200, fee: '1일 8,000원' },
+        { name: '(샘플) 중문 관광단지 주차장', kind: 'paid', addr: '서귀포시 중문동', lat: 33.2540, lng: 126.4120, spaces: 150, fee: '1시간 2,000원' },
+      ]
+      const COLOR = { free: '#4aa0e6', paid: '#d9363e', mixed: '#f07f1c', unknown: '#8b93a1' }   // CSS --free/--paid/--mixed 와 같은 값
+      const LABEL = { free: '무료', paid: '유료', mixed: '일부 유료', unknown: '요금 미상' }
+      // 요금 구분(무료/유료/혼합)은 공공데이터의 '요금정보' 값을 그대로 따름. 예전에 저장된 즐겨찾기 등 옛 값도 여기서 맞춤
+      // 한국 시각 기준 지금 요일·분
+      const nowKST = () => {
+        const f = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false })
+        const q = Object.fromEntries(f.formatToParts(new Date()).map((x) => [x.type, x.value]))
+        const ko = { Mon: '월', Tue: '화', Wed: '수', Thu: '목', Fri: '금', Sat: '토', Sun: '일' }[q.weekday]
+        return { weekend: q.weekday === 'Sat' || q.weekday === 'Sun', min: (Number(q.hour) % 24) * 60 + Number(q.minute), label: ko + ' ' + q.hour.padStart(2, '0') + ':' + q.minute }
+      }
+      const toMin = (s) => { const [a, b] = s.split(':').map(Number); return a * 60 + b }
+      // 요금 구분은 공공데이터 '요금정보'를 따름. 단 '평일 유료시간 이외 무료'로 적힌 주차장(paidWindow)만 지금 시각으로 바꿈
+      const baseKind = (p) => (p.fee === '무료' ? 'free' : p.fee === '유료' ? 'paid' : p.fee === '혼합' ? 'mixed' : p.kind in COLOR ? p.kind : 'unknown')
+      function feeKind(p, now = nowKST()) {
+        const k = baseKind(p)
+        if (!p.paidWindow || k === 'free') return k
+        const paidNow = !now.weekend && now.min >= toMin(p.paidWindow.start) && now.min < toMin(p.paidWindow.end)
+        return paidNow ? k : 'free'
+      }
+      function applyKinds() { const now = nowKST(); data.forEach((p) => { p.kind = feeKind(p, now) }); favs.forEach((p) => { p.kind = feeKind(p, now) }); $('nowtag').textContent = '기준 ' + now.label }
+
+      // 제주(추자도·마라도 포함)만 보이도록 지도 범위를 제한 → 범위 밖 타일은 아예 요청하지 않아 용량 절약
+      const JEJU = L.latLngBounds([33.05, 126.05], [34.05, 127.10])
+      const map = L.map('map', { maxBounds: JEJU, maxBoundsViscosity: 1, minZoom: 9 }).setView([33.38, 126.55], 10)
+      map.attributionControl.setPrefix(false)   // Leaflet 표시는 끄고, OSM 출처(라이선스 필수)만 남김
+      // HOT 스타일: 같은 OpenStreetMap 데이터인데 오름(봉우리) 삼각형 표시가 없음
+      L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+        subdomains: 'abc', maxZoom: 19, minZoom: 9, bounds: JEJU, attribution: '© OpenStreetMap contributors, Tiles: HOT, OSM France',
+      }).addTo(map)
+      const $ = (id) => document.getElementById(id)
+      const layer = L.layerGroup().addTo(map)
+      // 확대할수록 핀도 조금씩 커짐 (줌 10 → 8px, 한 단계마다 +1.6px, 최대 26px)
+      const sizePins = () => $('map').style.setProperty('--pin', Math.max(6, Math.min(26, 8 + (map.getZoom() - 10) * 1.6)) + 'px')
+      map.on('zoomend', sizePins)
+      let data = []
+      let routeDest = null   // 길찾기 중이면 목적지 주차장 (다른 주차장은 숨김)
+      let focus = null   // AI 검색 결과가 있으면 목록에 이것만 보여줌
+      const hl = L.layerGroup().addTo(map)
+
+      const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+
+      // ── 선택한 주차장의 상세 정보를 오른쪽 카드에 표시 ──
+      let sel = null, selId = null
+      const km = (m) => (m >= 1000 ? (m / 1000).toFixed(1) + 'km' : m + 'm')
+      function clearSel() {
+        sel?.row?.classList.remove('sel'); sel?.m?.getElement()?.firstChild?.classList.remove('sel')
+        sel = null; selId = null
+      }
+      function closeDetail() { clearSel(); $('detail').style.display = 'none'; $('list').style.display = '' }   // 닫으면 주차장 목록이 다시 나옴
+      function showDetail(p, m, row, scroll) {
+        clearSel(); selId = p.id; sel = { m, row }
+        row?.classList.add('sel'); m?.getElement()?.firstChild?.classList.add('sel')
+        if (scroll) row?.scrollIntoView({ block: 'nearest' })
+        const charge = p.basicCharge ? `${p.basicTime || '-'}분 ${Number(p.basicCharge).toLocaleString()}원` : (p.fee || '-')
+        const d = $('detail')
+        d.style.display = 'block'
+        $('list').style.display = 'none'   // 하나를 고르면 나머지 목록은 숨김
+        d.innerHTML = `<button class="x" title="닫기">×</button>
+          <h2>${esc(p.name)}</h2>
+          <span class="tag" style="background:${COLOR[p.kind]}">${LABEL[p.kind]}</span>${p.type ? `<span class="tag" style="background:#5d6675">${esc(p.type)}</span>` : ''}
+          <dl>
+            <dt>주소</dt><dd>${esc(p.addr || '-')}</dd>
+            <dt>주차면수</dt><dd>${esc(p.spaces || '-')}면</dd>
+            <dt>요금</dt><dd>${esc(p.fee || '-')}${p.fee !== '무료' && p.basicCharge ? ' · 기본 ' + esc(charge) : ''}</dd>
+            ${p.paidWindow ? `<dt>유료 시간</dt><dd>평일 ${esc(p.paidWindow.start)}~${esc(p.paidWindow.end)}만 유료<br><b>${p.kind === 'free' ? '지금은 무료 시간' : '지금은 유료 시간'}</b> <span style="color:var(--ink-2)">(밤·주말 무료)</span></dd>` : p.fee !== '무료' ? '<dt>요일 요금</dt><dd><span style="color:var(--ink-2)">요일별 요금 정보 없음 (항상 유료로 표시)</span></dd>' : ''}
+            <dt>운영시간</dt><dd>${p.weekdayOpen ? esc(p.weekdayOpen + ' ~ ' + p.weekdayClose) + ' (평일)' : '-'}</dd>
+            <dt>전화</dt><dd>${esc(p.phone || '-')}</dd>
+            ${p.distanceM != null ? `<dt>기준 거리</dt><dd>${km(p.distanceM)}</dd>` : ''}
+          </dl>`
+        d.querySelector('.x').onclick = closeDetail
+        const fb = document.createElement('button')
+        fb.className = 'favbtn'
+        const paint = () => { const on = isFav(p.id); fb.classList.toggle('on', on); fb.innerHTML = on ? '<span class="fs">★</span> 즐겨찾기' : '☆ 즐겨찾기' }
+        fb.onclick = async () => { fb.disabled = true; await (isFav(p.id) ? favRemove(p.id) : favAdd(p)); fb.disabled = false; paint() }
+        paint()
+        d.appendChild(fb)
+        const nav = document.createElement('div')
+        nav.className = 'navlinks'
+        const q = encodeURIComponent(p.name)
+        nav.innerHTML = `<button type="button" class="gw">길찾기 (카페·맛집 보기)</button>
+          <a target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}">구글 지도</a>`
+        nav.querySelector('.gw').onclick = () => findRoute(p)
+        d.appendChild(nav)
+      }
+
+      // ── 즐겨찾기(장바구니): Supabase favorites 테이블에 저장, 테이블이 없으면 이 브라우저(localStorage)에 임시 저장 ──
+      const SB = window.SB || {}
+      let favMode = /^https?:/.test(SB.url || '') && SB.key && !SB.key.startsWith('%') ? 'supabase' : 'local'
+      const nickname = '익명'   // Supabase 를 못 쓰는 환경에서 브라우저 저장 이름으로만 사용
+      let favs = []   // 주차장 객체 목록 (최근에 담은 순)
+      const isFav = (id) => favs.some((f) => f.id === id)
+      // ── 로그인 (Supabase Auth, 이메일+비밀번호) — 세션만 이 브라우저에 저장하고 비밀번호는 저장하지 않음 ──
+      let session = (() => { try { return JSON.parse(localStorage.getItem('parking-auth') || 'null') } catch { return null } })()
+      const saveSession = (s) => { session = s; try { s ? localStorage.setItem('parking-auth', JSON.stringify(s)) : localStorage.removeItem('parking-auth') } catch {} }
+      const toSession = (j) => ({ access_token: j.access_token, refresh_token: j.refresh_token, expires_at: j.expires_at || Math.floor(Date.now() / 1000) + (j.expires_in || 3600), email: j.user?.email, user_id: j.user?.id })
+      const authMsg = (j) => {
+        const m = String(j.msg || j.error_description || j.message || j.error || '')
+        if (/Invalid login credentials/i.test(m)) return '이메일 또는 비밀번호가 맞지 않아요'
+        if (/already registered/i.test(m)) return '이미 가입된 이메일이에요'
+        if (/Email not confirmed/i.test(m)) return '이메일 확인이 필요해요. 받은 메일의 링크를 눌러 주세요'
+        if (/at least|weak|short/i.test(m)) return '비밀번호는 6자 이상이어야 해요'
+        if (/valid email|invalid.*email/i.test(m)) return '이메일 형식을 확인해 주세요'
+        if (/rate limit|too many|seconds/i.test(m)) return '요청이 너무 많아요. 잠시 후 다시 시도해 주세요'
+        return m || '요청에 실패했어요'
+      }
+      async function authCall(path, body) {
+        const r = await fetch(`${SB.url}/auth/v1/${path}`, { method: 'POST', headers: { apikey: SB.key, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        const j = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(authMsg(j))
+        return j
+      }
+      async function refreshSession() {
+        if (!session?.refresh_token) return false
+        try { saveSession(toSession(await authCall('token?grant_type=refresh_token', { refresh_token: session.refresh_token }))); return true }
+        catch { saveSession(null); return false }
+      }
+      // DB 요청: 로그인했으면 내 토큰으로, 아니면 공개 키로. 토큰이 만료됐으면 한 번 갱신
+      const sb = async (path, opt = {}) => {
+        const call = () => fetch(`${SB.url}/rest/v1/${path}`, { ...opt, headers: { apikey: SB.key, Authorization: 'Bearer ' + (session?.access_token || SB.key), 'Content-Type': 'application/json', ...(opt.headers || {}) } })
+        if (session && session.expires_at - 60 < Date.now() / 1000) await refreshSession()
+        let r = await call()
+        if (r.status === 401 && session && (await refreshSession())) r = await call()
+        return r
+      }
+      const localKey = () => 'parking-favs:' + nickname
+      const localSave = () => { try { localStorage.setItem(localKey(), JSON.stringify(favs)) } catch {} }
+
+      let favErr = ''
+      async function favLoad() {
+        favs = []; favErr = ''
+        if (favMode === 'supabase') {
+          if (session) {
+            try {
+              const r = await sb('favorites?select=item_id,title,data&order=created_at.desc')   // 내 것만 (Supabase 정책이 걸러 줌)
+              const j = await r.json()
+              if (!r.ok) throw new Error(j.message || r.statusText)
+              favs = j.map((x) => (x.data && x.data.lat ? x.data : data.find((p) => p.id === x.item_id) || { id: x.item_id, name: x.title }))
+            } catch (e) { favErr = e.message }
+          }
+        } else { try { favs = JSON.parse(localStorage.getItem(localKey()) || '[]') } catch { favs = [] } }
+        applyKinds(); renderFavs()
+      }
+      async function favAdd(p) {
+        if (favMode === 'supabase' && !session) { openLogin('즐겨찾기를 쓰려면 로그인해 주세요'); return }
+        favs.unshift(p); renderFavs()
+        if (favMode === 'supabase') {
+          const r = await sb('favorites', { method: 'POST', body: JSON.stringify({ source: 'parking', item_id: p.id, title: p.name, data: p }) })
+          if (!r.ok && r.status !== 409) { favs.shift(); renderFavs(); alert('즐겨찾기 저장 실패: ' + ((await r.json().catch(() => ({}))).message || r.status)) }
+        } else localSave()
+      }
+      async function favRemove(id) {
+        if (favMode === 'supabase' && !session) return
+        const keep = favs; favs = favs.filter((f) => f.id !== id); renderFavs()
+        if (favMode === 'supabase') {
+          const r = await sb(`favorites?item_id=eq.${encodeURIComponent(id)}&user_id=eq.${session.user_id}`, { method: 'DELETE' })
+          if (!r.ok) { favs = keep; renderFavs(); alert('삭제 실패') }
+        } else localSave()
+      }
+      function renderFavs() {
+        $('favCount').textContent = `(${favs.length})`
+        $('favNote').textContent = favMode !== 'supabase' ? '💾 이 브라우저에만 저장' : favErr ? '⚠ ' + favErr : session ? '☁ 내 계정에 저장 중' : '🔒 로그인하면 즐겨찾기를 쓸 수 있어요'
+        const box = $('favlist')
+        box.innerHTML = favs.length ? '' : `<div class="empty">${favMode === 'supabase' && !session ? '로그인하면 내 즐겨찾기가 여기에 보여요.' : '지도의 주차장을 눌러 상세 카드의 ☆ 즐겨찾기를 눌러 보세요.'}</div>`
+        favs.forEach((p) => {
+          const c = document.createElement('div')
+          c.className = 'card'
+          c.innerHTML = `<b><span class="fstar">★</span>${esc(p.name)}</b><span>${esc(p.spaces || '-')}면 · ${esc(p.fee || '-')}</span><button class="rm" title="삭제">×</button>`
+          c.querySelector('.rm').onclick = (e) => { e.stopPropagation(); favRemove(p.id) }
+          c.onclick = () => { if (p.lat) map.setView([p.lat, p.lng], 16); showDetail(p, null, null) }
+          box.appendChild(c)
+        })
+        updateFavMarks()
+      }
+      $('favClear').addEventListener('click', async () => {
+        if (!favs.length || !confirm('즐겨찾기를 모두 비울까요?')) return
+        for (const f of [...favs]) await favRemove(f.id)
+      })
+
+      // ── 로그인 창·버튼 ──
+      let authMode = 'login'
+      const authMsgBox = (t, ok) => { $('aMsg').textContent = t; $('aMsg').className = ok ? 'ok' : '' }
+      function setAuthMode(m) {
+        authMode = m
+        $('authTitle').textContent = m === 'login' ? '로그인' : '회원가입'
+        $('aPw2').hidden = m === 'login'; $('aPw2').required = m !== 'login'; $('aPw2').value = ''
+        $('aGo').textContent = m === 'login' ? '로그인' : '가입하기'
+        $('aSwitch').textContent = m === 'login' ? '계정이 없어요 → 회원가입' : '이미 계정이 있어요 → 로그인'
+        $('aPw').autocomplete = m === 'login' ? 'current-password' : 'new-password'
+      }
+      function openAuth(mode, msg) { setAuthMode(mode); authMsgBox(msg || '', true); $('modal').hidden = false; $('aEmail').focus() }
+      const openLogin = (msg) => openAuth('login', msg)
+      const locked = () => favMode === 'supabase' && !session   // 로그인 전에는 지도를 가림
+      function closeLogin() { if (locked()) return; $('modal').hidden = true; $('aPw').value = ''; $('aPw2').value = '' }
+      function updateAuthUI() {
+        $('authBtn').textContent = session ? `${session.email} · 로그아웃` : '로그인'
+        $('authBtn').style.display = favMode === 'supabase' ? '' : 'none'
+        $('signupBtn').style.display = favMode === 'supabase' && !session ? '' : 'none'
+        document.body.classList.toggle('locked', locked())
+        if (locked() && $('modal').hidden) openLogin('로그인하면 내 위치 주변 주차장 지도를 볼 수 있어요')
+        else if (!locked()) startUp()
+      }
+      $('authBtn').addEventListener('click', async () => {
+        if (!session) return openLogin()
+        const t = session.access_token
+        saveSession(null); started = false; clearRoute(); updateAuthUI(); favLoad()
+        fetch(`${SB.url}/auth/v1/logout`, { method: 'POST', headers: { apikey: SB.key, Authorization: 'Bearer ' + t } }).catch(() => {})
+      })
+      $('signupBtn').addEventListener('click', () => openAuth('signup'))
+      $('aSwitch').addEventListener('click', () => { setAuthMode(authMode === 'login' ? 'signup' : 'login'); authMsgBox('') })
+      $('aClose').addEventListener('click', closeLogin)
+      $('modal').addEventListener('click', (e) => { if (e.target === $('modal')) closeLogin() })
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('modal').hidden) closeLogin() })
+      $('authForm').addEventListener('submit', async (e) => {
+        e.preventDefault()
+        const email = $('aEmail').value.trim(), password = $('aPw').value
+        if (authMode === 'signup' && password !== $('aPw2').value) return authMsgBox('비밀번호가 서로 달라요')
+        $('aGo').disabled = true; authMsgBox('')
+        try {
+          if (authMode === 'signup') {
+            const back = /^https?:/.test(location.protocol) ? location.origin + location.pathname : ''
+            const j = await authCall('signup' + (back ? '?redirect_to=' + encodeURIComponent(back) : ''), { email, password })
+            if (!j.access_token) { setAuthMode('login'); authMsgBox('가입 완료! 확인 메일의 링크를 누른 뒤 로그인해 주세요.', true); return }
+            saveSession(toSession(j))
+          } else {
+            saveSession(toSession(await authCall('token?grant_type=password', { email, password })))
+          }
+          closeLogin(); updateAuthUI(); favLoad()
+        } catch (err) { authMsgBox(err.message) } finally { $('aGo').disabled = false }
+      })
+      // (첫 updateAuthUI() 는 맨 아래 load() 앞에서 호출 — 아래 변수들이 선언된 뒤여야 함)
+
+      // 메일의 확인 링크를 눌러 돌아왔을 때: 주소 뒤의 #access_token=... 으로 자동 로그인 (오류면 안내)
+      ;(async () => {
+        const q = new URLSearchParams(location.hash.slice(1))
+        const bad = q.get('error_description'), t = q.get('access_token')
+        if (!bad && !t) return
+        window.history.replaceState(null, '', location.pathname + location.search)   // (이 페이지의 history 변수는 AI 대화용이라 window. 를 붙임)
+        if (bad) return openAuth('login', bad + ' — 다시 로그인하거나 가입해 주세요')
+        try {
+          const r = await fetch(`${SB.url}/auth/v1/user`, { headers: { apikey: SB.key, Authorization: 'Bearer ' + t } })
+          const u = await r.json()
+          if (!r.ok) throw new Error()
+          saveSession({ access_token: t, refresh_token: q.get('refresh_token'), expires_at: Number(q.get('expires_at')) || Math.floor(Date.now() / 1000) + Number(q.get('expires_in') || 3600), email: u.email, user_id: u.id })
+          updateAuthUI(); favLoad()
+        } catch { openAuth('login', '확인은 끝났어요. 로그인해 주세요') }
+      })()
+
+      const entries = new Map()   // 주차장 id → { 지도 마커, 목록 줄, 데이터 }
+      const pinIcon = (p) => L.divIcon({ className: '', html: isFav(p.id) ? '<div class="star">★</div>' : `<div class="pin" style="background:${COLOR[p.kind]}"></div>`, iconSize: [0, 0], iconAnchor: [0, 0], popupAnchor: [0, -12] })
+      const badgeHtml = (p) => (isFav(p.id) ? '<span class="bd fstar">★</span>' : `<span class="bd dot" style="background:${COLOR[p.kind]}"></span>`)
+      // 즐겨찾기가 바뀌면 지도 핀·목록 점을 황금색 별로(또는 원래대로) 바꿈
+      function updateFavMarks() {
+        entries.forEach(({ m, row, p }) => {
+          m.setIcon(pinIcon(p)); m.setZIndexOffset(isFav(p.id) ? 1000 : 0)
+          const bd = row.querySelector('.bd'); if (bd) bd.outerHTML = badgeHtml(p)
+        })
+        const e = selId && entries.get(selId)
+        if (e) e.m.getElement()?.firstChild?.classList.add('sel')
+      }
+
+      function render() {
+        layer.clearLayers(); sel = null; entries.clear()
+        const on = { free: $('fFree').checked, paid: $('fPaid').checked, mixed: $('fMixed').checked, unknown: true }
+        const rows = routeDest ? [routeDest] : focus ?? data.filter((p) => on[p.kind])
+        $('list').innerHTML = ''
+        if (routeDest) {
+          const bar = document.createElement('div')
+          bar.className = 'focusbar'
+          bar.innerHTML = '<span>🚗 길찾기 중 — 목적지만 표시</span><button type="button">모든 주차장 보기</button>'
+          bar.querySelector('button').onclick = clearRoute
+          $('list').appendChild(bar)
+        }
+        if (focus && !routeDest) {
+          const bar = document.createElement('div')
+          bar.className = 'focusbar'
+          bar.innerHTML = `<span>🔎 AI 검색 결과 ${focus.length}곳</span><button type="button">전체 보기</button>`
+          bar.querySelector('button').onclick = () => { focus = null; hl.clearLayers(); render() }
+          $('list').appendChild(bar)
+        }
+        rows.forEach((p, i) => {
+          const m = L.marker([p.lat, p.lng], { icon: pinIcon(p), zIndexOffset: isFav(p.id) ? 1000 : 0 }).addTo(layer)
+          const row = document.createElement('div')
+          row.className = 'row'
+          const badge = badgeHtml(p)
+          const dist = focus && p.distanceM != null ? ` · ${p.distanceM >= 1000 ? (p.distanceM / 1000).toFixed(1) + 'km' : p.distanceM + 'm'}` : ''
+          row.innerHTML = `<b>${badge}${esc(p.name)}</b><span class="meta">${esc(p.addr)} · ${esc(p.spaces || '-')}면${esc(p.fee ? ' · ' + p.fee : '')}${dist}</span>`
+          entries.set(p.id, { m, row, p })
+          row.onclick = () => { map.setView([p.lat, p.lng], 16); showDetail(p, m, row) }
+          m.on('click', () => showDetail(p, m, row, true))
+          $('list').appendChild(row)
+          if (selId && p.id === selId) { row.classList.add('sel'); m.getElement()?.firstChild?.classList.add('sel'); sel = { m, row } }
+        })
+      }
+
+      function count() {
+        for (const k of ['free', 'paid', 'mixed']) $('c' + k[0].toUpperCase() + k.slice(1)).textContent = `(${data.filter((p) => p.kind === k).length})`
+      }
+
+      async function load() {
+        try {
+          const r = await fetch('/api/parking')
+          const j = await r.json()
+          if (!r.ok) throw new Error(j.error || r.statusText)
+          if (!j.items.length) throw new Error('제주 데이터가 0건이에요')
+          data = j.items
+          applyKinds()
+          $('status').textContent = `실제 데이터 ${data.length}곳`
+        } catch (e) {
+          data = SAMPLE
+          applyKinds()
+          $('status').textContent = `샘플 표시 중 — ${e.message}`
+          $('status').className = 'demo'
+        }
+        count(); render(); favLoad()
+      }
+
+      // ── AI 자연어 검색: /api/agent 가 주차장 검색 도구를 써서 답하고, 찾은 곳을 지도에 강조 ──
+      let history = []
+      // ── 내 위치 (브라우저 위치 권한) → AI 에게 "내 근처·여기서 출발"의 기준으로 전달 ──
+      let userLoc = null, meMarker = null
+      let startLabel = '내 위치'
+      const userLabel = () => startLabel
+      function setStart(lat, lng, label) {
+        startLabel = label.replace('임시 출발지(제주공항)', '제주공항')
+        userLoc = { lat: +lat.toFixed(5), lng: +lng.toFixed(5) }
+        $('locBtn').textContent = label + ' ✓'; $('locBtn').classList.add('on')
+        meMarker?.remove()
+        meMarker = L.marker([userLoc.lat, userLoc.lng], { icon: L.divIcon({ className: '', html: `<div class="me"><i></i><b>${esc(label)}</b></div>`, iconSize: [0, 0] }), zIndexOffset: 5000, interactive: false }).addTo(map)
+      }
+      // 위치를 못 얻으면(권한 거부·제주 밖·미지원) 제주공항을 임시 출발지로 표시 — 오른쪽 클릭으로 바꿀 수 있음
+      function fallbackStart(why) {
+        setStart(33.5104, 126.4914, '임시 출발지(제주공항)'); map.setView([33.5104, 126.4914], 12)
+        $('status').textContent = why + ' → 지도를 오른쪽 클릭하면 출발지를 바꿀 수 있어요'
+      }
+      function locate(auto) {
+        if (!navigator.geolocation) return fallbackStart('이 브라우저는 위치를 지원하지 않아요')
+        $('locBtn').textContent = '위치 찾는 중...'
+        navigator.geolocation.getCurrentPosition((pos) => {
+          const { latitude: la, longitude: ln } = pos.coords
+          if (!JEJU.contains([la, ln])) return fallbackStart('현재 위치가 제주 밖이에요')
+          setStart(la, ln, '내 위치'); map.setView([la, ln], 13)
+        }, (err) => fallbackStart(err.code === 1 ? '위치 권한이 꺼져 있어요' : '위치를 가져오지 못했어요'), { timeout: 10000 })
+      }
+      $('locBtn').addEventListener('click', () => locate(false))
+      map.on('contextmenu', (e) => { setStart(e.latlng.lat, e.latlng.lng, '출발지'); map.panTo(e.latlng) })   // 위치를 못 쓸 때: 오른쪽 클릭으로 출발지 지정
+      let started = false
+      function startUp() { if (started) return; started = true; locate(true) }   // 로그인 직후 한 번: 내 위치 표시
+      // 경로선 + 경로 주변 카페·맛집 표시
+      const routeLayer = L.layerGroup().addTo(map)
+      const PLACE_LABEL = { cafe: '카페', restaurant: '음식점', fast_food: '패스트푸드' }
+      const alongLabel = (pct) => (pct < 34 ? '경로 초반' : pct < 67 ? '경로 중간' : '경로 막바지')
+      function clearRoute() { routeLayer.clearLayers(); $('routeBox').style.display = 'none'; if (routeDest) { routeDest = null; render() } }
+      // 경로선을 그리고, 경로 주변 카페·음식점을 지도 점 + 오른쪽 목록(탭)으로 보여줌
+      function drawRoute(route, places, title, dest) {
+        routeLayer.clearLayers()
+        if (!route) return clearRoute()
+        routeDest = dest || null; render()   // 길찾기 중에는 목적지 주차장만 남김
+        const line = L.polyline(route.coords, { color: '#1a73e8', weight: 5, opacity: .85 }).addTo(routeLayer)
+        const markers = new Map()
+        ;(places || []).forEach((p) => {
+          markers.set(p, L.marker([p.lat, p.lng], { icon: L.divIcon({ className: '', html: `<div class="poi ${p.kind}"></div>`, iconSize: [12, 12] }) })
+            .bindTooltip(`${p.name} · ${PLACE_LABEL[p.kind]} · 출발지에서 ${p.alongKm}km 지점`).addTo(routeLayer))
+        })
+        map.fitBounds(line.getBounds().pad(0.15))
+        const box = $('routeBox')
+        box.style.display = 'block'
+        box.innerHTML = `<button type="button" class="clr">경로 지우기</button><h3>${esc(title || '길찾기')}</h3>
+          <div class="sum">차로 약 ${route.minutes}분 · ${route.km}km · 경로 주변 카페·맛집 ${(places || []).length}곳 (거리는 출발지부터 경로를 따라 잰 값)</div>
+          <div class="tabs"></div><div class="rows"></div>
+          <div class="sum" style="margin-top:8px">※ 한국관광공사 TourAPI 기준이라 별점·영업시간은 몰라요. 방문 전 확인하세요.</div>`
+        box.querySelector('.clr').onclick = clearRoute
+        const paint = (k) => {
+          box.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x.dataset.k === k))
+          const list = (places || []).filter((p) => k === 'all' || p.kind === k || (k === 'restaurant' && p.kind === 'fast_food')).sort((x, y) => x.alongKm - y.alongKm)
+          const rows = box.querySelector('.rows')
+          rows.innerHTML = list.length ? '' : '<div class="none">경로 근처에서 찾지 못했어요</div>'
+          list.forEach((p) => {
+            const r = document.createElement('div')
+            r.className = 'poi-row'
+            r.innerHTML = `<span class="poi ${p.kind}" style="flex:none"></span><b>${esc(p.name)}</b><small>${PLACE_LABEL[p.kind]} · 출발지에서 ${p.alongKm}km 지점</small>`
+            r.onclick = () => { map.setView([p.lat, p.lng], Math.max(map.getZoom(), 15)); markers.get(p)?.openTooltip() }
+            rows.append(r)
+          })
+        }
+        ;[['all', '전체'], ['cafe', '카페'], ['restaurant', '음식점']].forEach(([k, label]) => {
+          const x = document.createElement('button'); x.type = 'button'; x.dataset.k = k; x.textContent = label; x.onclick = () => paint(k); box.querySelector('.tabs').append(x)
+        })
+        paint('all')
+      }
+      // 주차장 → 길찾기 (AI 없이 바로)
+      async function findRoute(p) {
+        if (!userLoc) return alert('출발지가 없어요. 위쪽 "내 위치" 버튼을 누르거나 지도를 오른쪽 클릭해 출발지를 정해 주세요.')
+        const box = $('routeBox')
+        box.style.display = 'block'; box.innerHTML = '<div class="sum">경로와 주변 카페·맛집을 찾는 중...</div>'
+        try {
+          const r = await fetch('/api/route', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fromLat: userLoc.lat, fromLng: userLoc.lng, toLat: p.lat, toLng: p.lng }) })
+          const j = await r.json()
+          if (!r.ok) throw new Error(j.error || r.statusText)
+          drawRoute(j.route, j.places, `${userLabel()} → ${p.name}`, p)
+          if (j.placesError) $('routeBox').querySelector('.rows').innerHTML = '<div class="none" style="color:var(--hit)">카페·맛집 검색에 실패했어요: ' + esc(j.placesError) + '</div>'
+        } catch (e) { box.innerHTML = '<div class="sum" style="color:var(--hit)">길찾기 실패: ' + esc(e.message) + '</div>' }
+      }
+      async function ask(text) {
+        const box = $('answer'), btn = $('go')
+        btn.disabled = true; btn.textContent = '검색 중...'; box.style.display = 'none'; box.className = ''
+        try {
+          const r = await fetch('/api/agent', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: text, history, userLoc }),
+          })
+          const j = await r.json()
+          if (!r.ok) throw new Error(j.error || r.statusText)
+          history.push({ role: 'user', content: text }, { role: 'assistant', content: j.answer })
+          history = history.slice(-10)
+          hl.clearLayers()
+          drawRoute(j.route, j.places, 'AI 추천 경로')
+          const pts = j.results.filter((p) => p.lat && p.lng)
+          pts.forEach((p) => { p.kind = feeKind(p) })
+          // 결과는 지도·오른쪽 목록 + AI 답/도구 호출 로그
+          showAnswer(box, j)
+          focus = pts.length ? pts : null
+          render()
+          if (pts.length && !j.route) map.fitBounds(L.latLngBounds(pts.map((p) => [p.lat, p.lng])).pad(0.3), { maxZoom: 15 })
+        } catch (e) {
+          box.className = 'err'; box.textContent = 'AI 검색 실패: ' + e.message
+        } finally { btn.disabled = false; btn.textContent = 'AI 검색' }
+      }
+      $('ask').addEventListener('submit', (e) => { e.preventDefault(); const t = $('q').value.trim(); if (t) ask(t) })
+      document.querySelectorAll('.ex a').forEach((a) => a.addEventListener('click', () => { $('q').value = a.dataset.q; ask(a.dataset.q) }))
+
+      // 요일·시각이 바뀌어 무유료가 달라지면 1분마다 자동으로 다시 그림 (시간제 주차장 30곳이 대상)
+      setInterval(() => {
+        if (!data.length) return
+        const before = data.map((p) => p.kind).join()
+        applyKinds()
+        if (data.map((p) => p.kind).join() !== before) { count(); render(); renderFavs() }
+      }, 60000)
+
+      ;['fFree', 'fPaid', 'fMixed'].forEach((id) => $(id).addEventListener('change', render))
+      updateAuthUI()
+      load()
+    </script>
+  </body>
+</html>

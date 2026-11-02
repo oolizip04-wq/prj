@@ -1,0 +1,15 @@
+이 폴더(server/data/raw)에 전국 카페 표준 데이터 파일을 넣어 주세요.
+
+- 형식: CSV (엑셀에서 받은 .xlsx 면 "CSV로 저장"해서 넣어 주세요). 파일 이름은 아무거나 괜찮아요.
+- 꼭 있어야 하는 열: 가게 이름, 위도, 경도 (주소가 있으면 더 좋아요)
+  예) 상호명 / 위도 / 경도 / 도로명주소 / 시도명 / 업종
+- 글자가 깨져 보이는 한글 CSV(EUC-KR)도 자동으로 읽어요.
+- 전국 파일이라 커도 괜찮아요. 제주 것만 골라서 작은 파일(server/data/cafes.json)로 만들어 써요.
+
+넣은 뒤 터미널에서:  npm run build:cafes
+(또는 저에게 "넣었어"라고 말해 주시면 제가 실행할게요.)
+
+
+https://api.data.go.kr/openapi/tn_pubr_public_cafe_shop_api
+
+98fe4916e1f0e3864c323eda1c515e9fa1bcad965bab6496a3621392e5eb019a
