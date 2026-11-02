@@ -42,7 +42,7 @@ export default function DetailCard({ p, onClose }) {
         <Button variant={fav ? 'warning' : 'outline-dark'} onClick={() => (fav ? removeFavorite(p.id) : addFavorite(p))}>
           {fav ? <><span className="fav-star">★</span> 즐겨찾기</> : '☆ 즐겨찾기'}
         </Button>
-        <Button variant="primary" onClick={() => findRoute(p)}><i className="bi bi-signpost-split me-1" />길찾기 (카페·맛집 보기)</Button>
+        <Button variant="primary" onClick={() => findRoute(p)}><i className="bi bi-signpost-split me-1" />길찾기 (가는 길 카페 보기)</Button>
         <a className="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener noreferrer"
           href={`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`}>구글 지도</a>
       </div>

@@ -28,7 +28,7 @@ export default function Home() {
       <section className="hero p-4 p-md-5 mb-4">
         <Badge bg="light" text="dark" className="mb-3">제주 콘텐츠·문화 IP</Badge>
         <h1 className="fw-bold">제주 주차장 지도</h1>
-        <p className="lead">공영주차장을 지도에서 찾고, 목적지까지 가는 길의 카페·맛집까지 한 번에. 자연어로 물어보면 AI가 공공데이터를 직접 찾아 답해요.</p>
+        <p className="lead">공영주차장을 지도에서 찾고, 목적지까지 가는 길의 카페까지 한 번에. 자연어로 물어보면 AI가 공공데이터를 직접 찾아 답해요.</p>
         <Button as={Link} to="/map" variant="primary" className="me-2"><i className="bi bi-geo-alt me-1" />지도 열기</Button>
         <Button as={Link} to="/agent" variant="outline-light"><i className="bi bi-robot me-1" />AI에게 물어보기</Button>
       </section>

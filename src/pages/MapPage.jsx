@@ -145,7 +145,7 @@ export default function MapPage() {
     if (pts.length) map.current.fitBounds(L.latLngBounds(pts.map((p) => [p.lat, p.lng])).pad(0.3), { maxZoom: 15 })
   }, [focus])
 
-  // ── 경로선 + 경로 주변 카페·맛집 점 ──
+  // ── 경로선 + 경로 주변 카페 점 ──
   useEffect(() => {
     const layer = routeLayer.current
     if (!layer) return
@@ -200,7 +200,9 @@ export default function MapPage() {
       )}
 
       <div className="map-body d-flex flex-grow-1" style={{ minHeight: 0 }}>
-        <div ref={mapEl} className="map-wrap flex-grow-1" />
+        <div className="position-relative flex-grow-1" style={{ minWidth: 0 }}>
+          <div ref={mapEl} className="map-wrap position-absolute top-0 start-0 w-100 h-100" />
+        </div>
         <aside className="side-panel">
           <RouteBox onPick={pickPoi} />
           {selected ? (

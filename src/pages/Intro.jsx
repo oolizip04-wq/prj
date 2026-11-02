@@ -50,7 +50,7 @@ export default function Intro() {
         <div className="intro-head">
           <div className="intro-eyebrow">JEJU PARKING MAP</div>
           <h1 className="intro-title">주차부터 시작되는<br />제주 여행</h1>
-          <p className="intro-sub">공영주차장 찾기부터 가는 길의 카페·맛집까지</p>
+          <p className="intro-sub">공영주차장 찾기부터 가는 길의 카페까지</p>
         </div>
         <button type="button" className="intro-cta" onClick={begin}>
           <span>주차장 찾기</span><i className="bi bi-arrow-right" />
