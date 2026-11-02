@@ -46,8 +46,8 @@ export const useAppStore = create((set, get) => ({
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw new Error(authMessage(error))
   },
-  signUp: async (email, password) => {
-    const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: `${location.origin}/map` } })
+  signUp: async (email, password, nickname) => {
+    const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { nickname }, emailRedirectTo: `${location.origin}/map` } })
     if (error) throw new Error(authMessage(error))
     return { needsConfirm: !data.session }   // 메일 확인을 켜 둔 경우 세션이 바로 안 생김
   },
@@ -72,7 +72,7 @@ export const useAppStore = create((set, get) => ({
     const { user } = get()
     if (!supabase || !user) return get().toast('로그인이 필요해요', 'warning')
     set({ favorites: [p, ...get().favorites] })   // 먼저 화면에 반영(낙관적), 실패하면 되돌림
-    const { error } = await supabase.from('favorites').insert({ source: 'parking', item_id: p.id, title: p.name, data: p, user_id: user.id })
+    const { error } = await supabase.from('favorites').insert({ source: 'parking', item_id: p.id, title: p.name, data: p, user_id: user.id, nickname: user.user_metadata?.nickname || '익명' })
     if (error && error.code !== '23505') {
       set({ favorites: get().favorites.filter((f) => f.id !== p.id) })
       get().toast('즐겨찾기 저장 실패: ' + error.message, 'danger')

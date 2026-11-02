@@ -12,12 +12,13 @@ export default function My() {
   const loading = useAppStore((s) => s.favLoading)
   const loadFavorites = useAppStore((s) => s.loadFavorites)
   const removeFavorite = useAppStore((s) => s.removeFavorite)
+  const nick = useAppStore((s) => s.user?.user_metadata?.nickname)
 
   useEffect(() => { loadFavorites() }, [loadFavorites])
 
   return (
     <>
-      <PageHeader icon="star-fill" title="내 즐겨찾기" subtitle="지도에서 ☆ 를 눌러 담은 주차장이에요. 내 계정에만 보여요." />
+      <PageHeader icon="star-fill" title={nick ? `${nick}님의 즐겨찾기` : '내 즐겨찾기'} subtitle="지도에서 ☆ 를 눌러 담은 주차장이에요. 내 계정에만 보여요." />
       {loading && !favorites.length ? <Loading /> : !favorites.length ? (
         <Empty text="아직 담은 주차장이 없어요">
           <Button as={Link} to="/map" variant="primary" size="sm" className="mt-2">지도에서 찾아보기</Button>

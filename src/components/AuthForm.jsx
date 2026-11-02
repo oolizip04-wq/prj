@@ -11,6 +11,7 @@ export default function AuthForm() {
   const [email, setEmail] = useState('')
   const [pw, setPw] = useState('')
   const [pw2, setPw2] = useState('')
+  const [nick, setNick] = useState('')
   const [msg, setMsg] = useState(null)   // { text, ok }
   const [busy, setBusy] = useState(false)
   const signup = mode === 'signup'
@@ -20,10 +21,11 @@ export default function AuthForm() {
   async function submit(e) {
     e.preventDefault()
     if (signup && pw !== pw2) return setMsg({ text: '비밀번호가 서로 달라요' })
+    if (signup && (nick.trim().length < 2 || nick.trim().length > 12)) return setMsg({ text: '닉네임은 2~12자로 정해 주세요' })
     setBusy(true); setMsg(null)
     try {
       if (signup) {
-        const { needsConfirm } = await signUp(email.trim(), pw)
+        const { needsConfirm } = await signUp(email.trim(), pw, nick.trim())
         if (needsConfirm) { setMode('login'); setMsg({ text: '가입 완료! 확인 메일의 링크를 누른 뒤 로그인해 주세요.', ok: true }) }
       } else await signIn(email.trim(), pw)
     } catch (err) { setMsg({ text: err.message }) } finally { setBusy(false) }
@@ -34,6 +36,7 @@ export default function AuthForm() {
       <Card.Body>
         <Card.Title as="h4" className="fw-bold mb-3">{signup ? '회원가입' : '로그인'}</Card.Title>
         <Form onSubmit={submit} className="d-grid gap-2">
+          {signup && <Form.Control placeholder="닉네임 (2~12자)" maxLength={12} required autoComplete="nickname" value={nick} onChange={(e) => setNick(e.target.value)} />}
           <Form.Control type="email" placeholder="이메일" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
           <Form.Control type="password" placeholder="비밀번호 (6자 이상)" minLength={6} required autoComplete={signup ? 'new-password' : 'current-password'} value={pw} onChange={(e) => setPw(e.target.value)} />
           {signup && <Form.Control type="password" placeholder="비밀번호 확인" required autoComplete="new-password" value={pw2} onChange={(e) => setPw2(e.target.value)} />}

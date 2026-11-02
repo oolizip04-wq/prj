@@ -31,7 +31,7 @@ export default function RootLayout() {
             </Nav>
             {user && (
               <div className="d-flex align-items-center gap-2 text-white-50 small">
-                <i className="bi bi-person-circle" />{user.email}
+                <i className="bi bi-person-circle" />{user.user_metadata?.nickname || user.email}
                 <Button size="sm" variant="outline-light" onClick={signOut}>로그아웃</Button>
               </div>
             )}

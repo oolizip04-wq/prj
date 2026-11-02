@@ -6,10 +6,11 @@ export default function FavBar({ onPick }) {
   const favorites = useAppStore((s) => s.favorites)
   const removeFavorite = useAppStore((s) => s.removeFavorite)
   const clearFavorites = useAppStore((s) => s.clearFavorites)
+  const nick = useAppStore((s) => s.user?.user_metadata?.nickname)
   return (
     <footer className="fav-bar">
       <div className="d-flex align-items-center gap-2 mb-1">
-        <b className="small">⭐ 즐겨찾기 ({favorites.length})</b>
+        <b className="small">⭐ {nick ? `${nick}님의 즐겨찾기` : '내 즐겨찾기'} ({favorites.length})</b>
         {favorites.length > 0 && <Button size="sm" variant="outline-secondary" className="ms-auto py-0" onClick={clearFavorites}>모두 비우기</Button>}
       </div>
       <div className="d-flex gap-2 overflow-auto" style={{ minHeight: 34 }}>
